@@ -28,6 +28,9 @@
  *		Better control of levels of lights than just on/off.
  *		Adding more than one contact/motion sensors.
  *
+ *	For limitations and missing things, please see the readme file at github:
+ *		https://github.com/PeterLarsen-CPH/HallwayLight-for-SmartThings.git
+ *
 */
 definition(
         name: "Hallway Light",
