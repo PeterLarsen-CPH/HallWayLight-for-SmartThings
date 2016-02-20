@@ -30,5 +30,6 @@
 
  * Of other things planned…:
 
-     Support of setting colors
-     Support of controlling outlet switches, e.g. when the level reaches maximum
+     Support of setting colors.
+     
+     Support of controlling outlet switches, e.g. when the level reaches maximum.
