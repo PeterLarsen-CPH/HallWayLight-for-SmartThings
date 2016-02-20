@@ -1,0 +1,282 @@
+/*
+ *  Copyright 2015 SmartThings
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ *  in compliance with the License. You may obtain a copy of the License at:
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
+ *  for the specific language governing permissions and limitations under the License.
+ *
+ *	Description:
+ *		This app is called “Hallway Light” as it is meant for places where you often pass through and 
+ *		therefore don’t need much light to find your way.  On the other hand, if you stay in the room a
+ *		little bit longer, you would probably like to have more light.
+ *		
+ *		The main difference between this app and Smart Light by SmartThings, is that this app allows
+ *		you to control the lights in more ways, like the minimum and maximum levels of light
+ *		depending on evening/morning and night settings and detecting if other apps have taken control
+ *		over the lights and therefore should leave the lights as they are etc.
+ *
+ *	Compared to Smart Light by SmartThings, this app solves the following problems:
+ *		Color of LIFX bulbs is not handled very well (e.g. Warm White does not work at all).
+ *		Start and end times does (or did?) not work in Smart Light.
+ *		Destinctions between evening and night settings in one app.
+ *		Definition of a ownership concept, where the app can detect if other apps is used to set the lights.
+ *		Better control of levels of lights than just on/off.
+ *		Adding more than one contact/motion sensors.
+ *
+*/
+definition(
+        name: "Hallway Light",
+        namespace: "PeterLarsen-CPH",
+        author: "Peter Larsen",
+        description: "Control the light if no one else control the lights",
+        category: "Convenience",
+        iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
+        iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
+        iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png")
+
+preferences {
+    section("When activity on any of these sensors") {
+        input "contactSensors", "capability.contactSensor", title: "Open/close sensors", multiple: true, required: false
+        input "motionSensors", "capability.motionSensor", title: "Motion sensors?", multiple: true, required: false
+    }
+    section("Turn on these lights") {
+        input "switches", "capability.colorTemperature", multiple: true, required: true
+    input "colorTemperature", "enum", title: "Color Temperature", options:
+      [[2500: "Warm White (2500K)"], [2750: "Soft White (2750K)"], [3300: "White (3300K)"], [4100: "Moonlight (4100K)"],
+       [5000: "Cool White (5000K)"], [6500: "Daylight (6500K)"]], defaultValue: "2750", required: true, multiple: false
+    }
+	section("Set MIN and MAX levels for lights and different timings for the evening") {
+        input "startLight", "number", title: "Minimum level before switching lights off (1-8)", defaultValue: "2", range: "1..8",
+        	multiple: false, required: true
+        input "maxLight", "number", title: "Maximum level (2-9)", defaultValue: "9", range: "2..9",
+        	multiple: false, required: true
+        input "turnOnSteps", "number", title: "Set how quickly the lights turns on and increase in the level of light (1-2)", defaultValue: "1", range: "1..2",
+        	multiple: false, required: true
+		input "timeBeforeDecreasing", "enum", title: "Specify how long the lights stays on before decreasing", options:
+			[[10: "Short (10 sec)"], [60: "Middle (1 min)"], [300: "Long (5 min)"], [1800: "Longer (30 min)"]], defaultValue: "300", required: true, multiple: false
+		input "timeBeforeLightOff", "enum", title: "Specify how long the lights stays at minimum level before turning off", defaultValue: "1", required: true, multiple: false,
+			options: [[1: "Short (1 min)"], [5: "Middle (5 min)"], [1800: "Long (30 min)"], [3600: "Longer (1 hour)"]]
+	}
+	section("Set MIN and MAX levels for the night time (between 11pm and 6am (or sunrise)") {
+        input "lightsOnInNight", "bool", title: "Lights on during the night", defaultValue: false,
+        	multiple: false, required: true
+        input "startLightNight", "number", title: "Minimum level before switching lights off (1-8)", defaultValue: "1", range: "1..8",
+        	multiple: false, required: true
+        input "maxLightNight", "number", title: "Maximum level (2-9)", defaultValue: "2", range: "2..9",
+        	multiple: false, required: true
+		input "timeBeforeDecreasingNight", "enum", title: "Specify how long the lights stays on before decreasing", options:
+			[[10: "Short (10 sec)"], [60: "Middle (1 min)"], [300: "Long (5 min)"], [1800: "Longer (30 min)"]], defaultValue: "10", required: true, multiple: false
+	}
+
+}
+
+def installed() {
+	log.debug("Installed")
+    allLightsOff();
+    initialize()
+}
+
+def updated() {
+	log.debug("Updated")
+    unsubscribe()
+    allLightsOff();
+    initialize();
+}
+
+def allLightsOff(){
+	log.debug "All lights off"
+    switches?.off()
+}
+
+def initialize() {
+
+	log.debug "Initialized with settings: ${settings}"
+	switches.each{s -> log.debug "Light added: ${s}, level: ${s.currentValue("level")}"; }
+	contactSensors.each({s -> log.debug "Contact sensors added: ${s} ${s.currentState("contact").value}" });
+	motionSensors.each({s -> log.debug "Motion sensors added: ${s} ${s.currentState("motion").value}" });    
+
+	state.levels = [00, 11, 22, 33, 44, 55, 66, 77, 88, 99]
+    state.startLightUseThis = startLight
+    state.maxLightUseThis = maxLight
+    state.timeBeforeDecreasingUseThis = timeBeforeDecreasing
+
+	doWeOnwTheLights();	
+	dayPeriod()
+
+    if (contactSensors)
+    {
+    	subscribe(contactSensors, "contact.open", sensorDetectedHandler)
+       	subscribe(contactSensors, "contact.closed", sensorStoppedHandler)
+    }
+    if (motionSensors)
+    {
+    	subscribe(motionSensors, "motion.active", sensorDetectedHandler)
+       	subscribe(motionSensors, "motion.inactive", sensorStoppedHandler)
+    }
+}
+
+def sensorDetectedHandler(evt) {
+    log.debug "sensorDetectedHandler called: $evt"
+    def period = dayPeriod();
+    if (period == 'DAY')
+    	return;
+    if (period == 'NIGHT' && !lightsOnInNight)
+    	return;
+    increaseLights();
+}
+
+def sensorStoppedHandler(evt) {
+    log.debug "sensorStoppedHandler called: $evt"
+	runIn(state.timeBeforeDecreasingUseThis.toInteger(), decreaseLights, [overwrite: true]);
+}
+
+//def levelFromColorTemperature(){
+//	def colortemp = switches[0].currentValue("colorTemperature")
+//	def level = colortemp - state.colorTemperature;
+//    log.debug level
+//    return level;
+//}
+def levelFromBulbLevel(){
+	def allOff = !switches.any({s -> s.currentSwitch == "on"});
+    if (allOff)
+    {
+    	return state.startLightUseThis
+    }
+    else
+    {
+		def level = switches[0].currentValue("level")
+		level = (((level / 10) - (level / 10).toInteger()) * 10).toInteger();
+        return level
+    }
+}
+
+def dayPeriod(){
+	def sunInfo = getSunriseAndSunset()
+  	def now = new Date()
+    state.startLightUseThis = startLight
+    state.maxLightUseThis = maxLight
+    state.timeBeforeDecreasingUseThis = timeBeforeDecreasing
+
+    if (timeOfDayIsBetween(sunInfo.sunrise, sunInfo.sunset, now, location.timeZone))
+    {
+    	log.debug 'DAY time'
+    	return 'DAY'
+	}
+
+	def nightTime = new Date(); 
+	//Date year: 2016, month: Calendar.APRIL, dayOfMonth: 5, hourOfDay: 14, minute: 12, second: 45) 
+	nightTime.set(hourOfDay: 23, minute: 00, second: 00);
+    nightTime = new Date(nightTime.time - location.timeZone.getRawOffset())
+
+	def morningTime = new Date(); 
+	morningTime.set(hourOfDay: 06, minute: 00, second: 00);
+    morningTime = new Date(morningTime.time - location.timeZone.getRawOffset())
+
+	if (timeOfDayIsBetween(sunInfo.sunset, nightTime, now, location.timeZone))
+    {
+    	log.debug 'EVENING time'
+    	return 'EVENING'
+	}        
+
+	if (timeOfDayIsBetween(morningTime, sunInfo.sunset, now, location.timeZone))
+    {
+    	log.debug 'MORNING time'
+    	return 'MORNING'
+	}        
+    
+    if (timeOfDayIsBetween(nightTime, sunInfo.sunrise, now, location.timeZone))
+    {
+	    state.startLightUseThis = startLightNight
+    	state.maxLightUseThis = maxLightNight
+    	state.timeBeforeDecreasingUseThis = timeBeforeDecreasingNight
+    	log.debug 'NIGHT time'
+    	return 'NIGHT'
+    }
+}
+
+def doWeOnwTheLights() {
+    def allOff = !switches.any({s -> s.currentSwitch == "on"});
+    def allOn = !switches.any({s -> s.currentSwitch == "off"});
+
+	def expectedLevel = levelFromBulbLevel();
+	def allSameLevelSetByUs = !switches.any({s -> s.currentValue("level") != state.levels[expectedLevel]})
+    def weOwnTheLights = allOff || allOn && allSameLevelSetByUs;
+
+	//switches.each({s -> log.trace "$s ${s.currentValue("level")}" })
+    log.debug "We own the lights: ${weOwnTheLights}"
+    return weOwnTheLights;
+}
+
+def areAllSensorsOff(){
+	//contactSensors.each({m -> log.trace m.currentState("contact").value});
+	//motionSensors.each({m -> log.trace m.currentState("motion").value});
+	def allContactsOff = !contactSensors.any({m -> m.currentState("contact").value == "open"});
+	def allMotionsOff = !motionSensors.any({m -> m.currentState("motion").value == "active"});
+    
+    log.debug "All sensors are off: ${allContactsOff && allMotionsOff}"
+    return allContactsOff && allMotionsOff;
+}
+
+def increaseLights(){
+    log.debug "increaseLights called"
+	def minRoundtrip = 1500; //1.5 seconds
+    def maxStayingInMethod = 15000; //15 seconds
+
+	if (doWeOnwTheLights())
+   	{
+        def enter = now()
+        while(true){
+	        def roundtrip = now()
+			if (areAllSensorsOff())
+				return;
+
+			def level = levelFromBulbLevel() + turnOnSteps;
+		    if (level > state.maxLightUseThis)
+               	level = state.maxLightUseThis
+	    	switches.setLevel(state.levels[level])
+		    log.trace "Setting bulbs to: ${state.levels[level]}%";    
+		    if (level >= state.maxLightUseThis)
+            	return;
+            
+            if ((now() - roundtrip) < minRoundtrip )
+            {
+            	def goToLseep = minRoundtrip - (now() - roundtrip)
+            	log.trace "sleeping ${goToLseep}"
+            	pause(goToLseep);
+            }
+
+            if (now() - enter > maxStayingInMethod)
+            {
+            	log.error "timed out"
+            	return;
+            }
+		}
+	}
+}
+
+def decreaseLights(){
+    log.debug "decreaseLights called"
+
+	if (doWeOnwTheLights() && areAllSensorsOff())
+   	{
+    	def level = levelFromBulbLevel()
+    	if (level > state.startLightUseThis)
+    	{
+			level = state.startLightUseThis;
+	    	switches.setLevel(state.levels[level])
+    		log.trace "Decreasing bulbs to: ${state.levels[level]}%";    
+    		runIn(timeBeforeLightOff.toInteger() * 60, decreaseLights, [overwrite: true]);
+		}
+		else
+		{
+			log.debug "Lights off";    
+			switches.off();
+		}
+	}
+}
+
