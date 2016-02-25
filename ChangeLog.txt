@@ -1,0 +1,8 @@
+
+2016-02-25
+  Getting weekday did not work - fixed by using a different method.
+  Color-temperature not used correctly - fixed.
+  Added the possibility to choose which light bulbs that is used to control the ownership up against
+  
+2016-02-20
+  Initial file
