@@ -47,11 +47,17 @@ preferences {
         input "contactSensors", "capability.contactSensor", title: "Open/close sensors", multiple: true, required: false
         input "motionSensors", "capability.motionSensor", title: "Motion sensors?", multiple: true, required: false
     }
-    section("Turn on these lights") {
-        input "switches", "capability.colorTemperature", multiple: true, required: true
-    input "colorTemperature", "enum", title: "Color Temperature", options:
-      [[2500: "Warm White (2500K)"], [2750: "Soft White (2750K)"], [3300: "White (3300K)"], [4100: "Moonlight (4100K)"],
-       [5000: "Cool White (5000K)"], [6500: "Daylight (6500K)"]], defaultValue: "2750", required: true, multiple: false
+    section("Then turn on these color temperature controllable lights") {
+        input "switches", "capability.colorTemperature", multiple: true, required: false
+    	input "colorTemperature", "enum", title: "Color Temperature", options:
+      		[[2500: "Warm White (2500K)"], [2750: "Soft White (2750K)"], [3300: "White (3300K)"], [4100: "Moonlight (4100K)"],
+       		[5000: "Cool White (5000K)"], [6500: "Daylight (6500K)"]], defaultValue: "2750", required: true, multiple: false
+    }
+    section("-or these level controllable lights") {
+        input "switchLevels", "capability.switchLevel", multiple: true, required: false
+    }
+    section("Select the bulbs used to state the ownership") {
+        input "OwnershipSwitches", "capability.switchLevel", multiple: true, required: true
     }
 	section("Set MIN and MAX levels for lights and different timings for the evening") {
         input "startLight", "number", title: "Minimum level before switching lights off (1-8)", defaultValue: "2", range: "1..8",
@@ -94,14 +100,18 @@ def updated() {
 def allLightsOff(){
 	log.debug "All lights off"
     switches?.off()
+    switchLevels?.off()
 }
 
 def initialize() {
 
 	log.debug "Initialized with settings: ${settings}"
-	switches.each{s -> log.debug "Light added: ${s}, level: ${s.currentValue("level")}"; }
+	switches.each{s -> log.debug "Color lights added: ${s}, level: ${s.currentValue("level")}"; }
+	switchLevels.each{s -> log.debug "Level lights added: ${s}, level: ${s.currentValue("level")}"; }
+	OwnershipSwitches.each{s -> log.debug "Ownership lights added: ${s}, level: ${s.currentValue("level")}"; }
 	contactSensors.each({s -> log.debug "Contact sensors added: ${s} ${s.currentState("contact").value}" });
 	motionSensors.each({s -> log.debug "Motion sensors added: ${s} ${s.currentState("motion").value}" });    
+
 
 	state.levels = [00, 11, 22, 33, 44, 55, 66, 77, 88, 99]
     state.startLightUseThis = startLight
@@ -135,24 +145,30 @@ def sensorDetectedHandler(evt) {
 
 def sensorStoppedHandler(evt) {
     log.debug "sensorStoppedHandler called: $evt"
+    dayPeriod()
 	runIn(state.timeBeforeDecreasingUseThis.toInteger(), decreaseLights, [overwrite: true]);
 }
 
-//def levelFromColorTemperature(){
-//	def colortemp = switches[0].currentValue("colorTemperature")
-//	def level = colortemp - state.colorTemperature;
-//    log.debug level
-//    return level;
-//}
+def changeColorTemperatureIfChanged(){
+	if (switches == null)
+    	return;
+	def colortemp = switches[0].currentValue("colorTemperature")
+    if (colortemp != colorTemperature.toInteger())
+    {
+    	switches.setColorTemperature(colorTemperature)
+    	log.debug "ColorTemperatore has changed and is set back"
+    }
+}
+
 def levelFromBulbLevel(){
-	def allOff = !switches.any({s -> s.currentSwitch == "on"});
+	def allOff = !OwnershipSwitches.any({s -> s.currentSwitch == "on"});
     if (allOff)
     {
     	return state.startLightUseThis
     }
     else
     {
-		def level = switches[0].currentValue("level")
+		def level = OwnershipSwitches[0].currentValue("level")
 		level = (((level / 10) - (level / 10).toInteger()) * 10).toInteger();
         return level
     }
@@ -164,7 +180,8 @@ def dayPeriod(){
     state.startLightUseThis = startLight
     state.maxLightUseThis = maxLight
     state.timeBeforeDecreasingUseThis = timeBeforeDecreasing
-
+    
+	//What if location is not set ?? (test that)
     if (timeOfDayIsBetween(sunInfo.sunrise, sunInfo.sunset, now, location.timeZone))
     {
     	log.debug 'DAY time'
@@ -173,7 +190,14 @@ def dayPeriod(){
 
 	def nightTime = new Date(); 
 	//Date year: 2016, month: Calendar.APRIL, dayOfMonth: 5, hourOfDay: 14, minute: 12, second: 45) 
-	nightTime.set(hourOfDay: 23, minute: 00, second: 00);
+    Calendar localCalendar = Calendar.getInstance()
+    localCalendar.setTimeZone(location.timeZone)
+    int currentDayOfWeek = localCalendar.get(Calendar.DAY_OF_WEEK)
+
+	if (currentDayOfWeek == Calendar.FRIDAY || currentDayOfWeek == Calendar.SATURDAY)
+	   	nightTime.set(hourOfDay: 23, minute: 59, second: 00);
+    else
+    	nightTime.set(hourOfDay: 23, minute: 00, second: 00);
     nightTime = new Date(nightTime.time - location.timeZone.getRawOffset())
 
 	def morningTime = new Date(); 
@@ -186,7 +210,7 @@ def dayPeriod(){
     	return 'EVENING'
 	}        
 
-	if (timeOfDayIsBetween(morningTime, sunInfo.sunset, now, location.timeZone))
+	if (timeOfDayIsBetween(morningTime, sunInfo.sunrise, now, location.timeZone))
     {
     	log.debug 'MORNING time'
     	return 'MORNING'
@@ -197,20 +221,20 @@ def dayPeriod(){
 	    state.startLightUseThis = startLightNight
     	state.maxLightUseThis = maxLightNight
     	state.timeBeforeDecreasingUseThis = timeBeforeDecreasingNight
-    	log.debug 'NIGHT time'
+    	log.debug "NIGHT time $Calendar.instance.DAY_OF_WEEK $Calendar.instance.SATURDAY"
     	return 'NIGHT'
     }
 }
 
 def doWeOnwTheLights() {
-    def allOff = !switches.any({s -> s.currentSwitch == "on"});
-    def allOn = !switches.any({s -> s.currentSwitch == "off"});
+    def allOff = !OwnershipSwitches.any({s -> s.currentSwitch == "on"});
+    def allOn = !OwnershipSwitches.any({s -> s.currentSwitch == "off"});
 
 	def expectedLevel = levelFromBulbLevel();
-	def allSameLevelSetByUs = !switches.any({s -> s.currentValue("level") != state.levels[expectedLevel]})
+	def allSameLevelSetByUs = !OwnershipSwitches.any({s -> s.currentValue("level") != state.levels[expectedLevel]})
     def weOwnTheLights = allOff || allOn && allSameLevelSetByUs;
 
-	//switches.each({s -> log.trace "$s ${s.currentValue("level")}" })
+	//OwnershipSwitches.each({s -> log.trace "$s ${s.currentValue("level")}" })
     log.debug "We own the lights: ${weOwnTheLights}"
     return weOwnTheLights;
 }
@@ -233,7 +257,9 @@ def increaseLights(){
 	if (doWeOnwTheLights())
    	{
         def enter = now()
-        while(true){
+    	changeColorTemperatureIfChanged()
+
+		while(true){
 	        def roundtrip = now()
 			if (areAllSensorsOff())
 				return;
@@ -241,7 +267,8 @@ def increaseLights(){
 			def level = levelFromBulbLevel() + turnOnSteps;
 		    if (level > state.maxLightUseThis)
                	level = state.maxLightUseThis
-	    	switches.setLevel(state.levels[level])
+	    	switches?.setLevel(state.levels[level])
+            switchLevels?.setLevel(state.levels[level])
 		    log.trace "Setting bulbs to: ${state.levels[level]}%";    
 		    if (level >= state.maxLightUseThis)
             	return;
@@ -271,14 +298,15 @@ def decreaseLights(){
     	if (level > state.startLightUseThis)
     	{
 			level = state.startLightUseThis;
-	    	switches.setLevel(state.levels[level])
+	    	switches?.setLevel(state.levels[level])
+            switchLevels?.setLevel(state.levels[level])
     		log.trace "Decreasing bulbs to: ${state.levels[level]}%";    
     		runIn(timeBeforeLightOff.toInteger() * 60, decreaseLights, [overwrite: true]);
 		}
 		else
 		{
 			log.debug "Lights off";    
-			switches.off();
+			allLightsOff()
 		}
 	}
 }
