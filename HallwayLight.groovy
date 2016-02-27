@@ -43,46 +43,73 @@ definition(
         iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png")
 
 preferences {
-    section("When activity on any of these sensors") {
-        input "contactSensors", "capability.contactSensor", title: "Open/close sensors", multiple: true, required: false
-        input "motionSensors", "capability.motionSensor", title: "Motion sensors?", multiple: true, required: false
+    page(name: "mainPage")
+}
+
+def mainPage() {
+    dynamicPage(name: "mainPage", title: "", install: true, uninstall: true) {
+
+	section("When activity on any of these sensors") {
+        input "contactSensors", "capability.contactSensor", title: "Open/close sensors", multiple: true, required: false, submitOnChange: true
+        input "motionSensors", "capability.motionSensor", title: "Motion sensors?", multiple: true, required: false, submitOnChange: true
     }
-    section("Then turn on these color temperature controllable lights") {
-        input "switches", "capability.colorTemperature", multiple: true, required: false
-    	input "colorTemperature", "enum", title: "Color Temperature", options:
-      		[[2500: "Warm White (2500K)"], [2750: "Soft White (2750K)"], [3300: "White (3300K)"], [4100: "Moonlight (4100K)"],
-       		[5000: "Cool White (5000K)"], [6500: "Daylight (6500K)"]], defaultValue: "2750", required: true, multiple: false
-    }
-    section("-or these level controllable lights") {
-        input "switchLevels", "capability.switchLevel", multiple: true, required: false
-    }
-    section("Select the bulbs used to state the ownership") {
-        input "OwnershipSwitches", "capability.switchLevel", multiple: true, required: true
-    }
-	section("Set MIN and MAX levels for lights and different timings for the evening") {
-        input "startLight", "number", title: "Minimum level before switching lights off (1-8)", defaultValue: "2", range: "1..8",
-        	multiple: false, required: true
-        input "maxLight", "number", title: "Maximum level (2-9)", defaultValue: "9", range: "2..9",
-        	multiple: false, required: true
-        input "turnOnSteps", "number", title: "Set how quickly the lights turns on and increase in the level of light (1-2)", defaultValue: "1", range: "1..2",
-        	multiple: false, required: true
-		input "timeBeforeDecreasing", "enum", title: "Specify how long the lights stays on before decreasing", options:
-			[[10: "Short (10 sec)"], [60: "Middle (1 min)"], [300: "Long (5 min)"], [1800: "Longer (30 min)"]], defaultValue: "300", required: true, multiple: false
-		input "timeBeforeLightOff", "enum", title: "Specify how long the lights stays at minimum level before turning off", defaultValue: "1", required: true, multiple: false,
-			options: [[1: "Short (1 min)"], [5: "Middle (5 min)"], [1800: "Long (30 min)"], [3600: "Longer (1 hour)"]]
+    if (contactSensors || motionSensors)
+    {
+        section("Then turn on these color temperature controllable lights") {
+            input "switches", "capability.colorTemperature", multiple: true, required: false, submitOnChange: true
+        }
+        if (switches)
+        {
+            section("Color Temperature") {
+                input "colorTemperature", "enum", title: "", options:
+                    [[2500: "Warm White (2500K)"], [2750: "Soft White (2750K)"], [3300: "White (3300K)"], [4100: "Moonlight (4100K)"],
+                    [5000: "Cool White (5000K)"], [6500: "Daylight (6500K)"]], defaultValue: "2750", required: true, multiple: false
+            }
+		}
+		section("-or these level controllable lights") {
+            input "switchLevels", "capability.switchLevel", multiple: true, required: false
+        }
+        
+        section("Select the bulbs used to state the ownership") {
+            input "OwnershipSwitches", "capability.switchLevel", multiple: true, required: true
+        }
+        section("Set MIN and MAX levels for lights and different timings for the evening") {
+            input "startLight", "number", title: "Minimum level before switching lights off (1-8)", defaultValue: "2", range: "1..8",
+                multiple: false, required: true
+            input "maxLight", "number", title: "Maximum level (2-9)", defaultValue: "9", range: "2..9",
+                multiple: false, required: true
+            input "turnOnSteps", "number", title: "Set how quickly the lights turns on and increase in the level of light (1-2)", defaultValue: "1", range: "1..2",
+                multiple: false, required: true
+            input "timeBeforeDecreasing", "enum", title: "Specify how long the lights stays on before decreasing", options:
+                [[10: "Short (10 sec)"], [60: "Middle (1 min)"], [300: "Long (5 min)"], [1800: "Longer (30 min)"]], defaultValue: "300", required: true, multiple: false
+            input "timeBeforeLightOff", "enum", title: "Specify how long the lights stays at minimum level before turning off", defaultValue: "1", required: true, multiple: false,
+                options: [[1: "Short (1 min)"], [5: "Middle (5 min)"], [30: "Long (30 min)"], [60: "Longer (1 hour)"]]
+        }
+        section("Night settings") {
+            input "lightsOnInNight", "bool", title: "Lights on during the night", defaultValue: false,
+                multiple: false, required: true, submitOnChange: true
+        }
+        if (lightsOnInNight)
+        {
+            section("Set MIN and MAX levels for the night time (between 11pm and 6am (or sunrise)") {
+                input "startLightNight", "number", title: "Minimum level before switching lights off (1-8)", defaultValue: "1", range: "1..8",
+                    multiple: false, required: true
+                input "maxLightNight", "number", title: "Maximum level (2-9)", defaultValue: "2", range: "2..9",
+                    multiple: false, required: true
+                input "timeBeforeDecreasingNight", "enum", title: "Specify how long the lights stays on before decreasing", options:
+                    [[10: "Short (10 sec)"], [60: "Middle (1 min)"], [300: "Long (5 min)"], [1800: "Longer (30 min)"]], defaultValue: "10", required: true, multiple: false
+            }
+        }
+        
 	}
-	section("Set MIN and MAX levels for the night time (between 11pm and 6am (or sunrise)") {
-        input "lightsOnInNight", "bool", title: "Lights on during the night", defaultValue: false,
-        	multiple: false, required: true
-        input "startLightNight", "number", title: "Minimum level before switching lights off (1-8)", defaultValue: "1", range: "1..8",
-        	multiple: false, required: true
-        input "maxLightNight", "number", title: "Maximum level (2-9)", defaultValue: "2", range: "2..9",
-        	multiple: false, required: true
-		input "timeBeforeDecreasingNight", "enum", title: "Specify how long the lights stays on before decreasing", options:
-			[[10: "Short (10 sec)"], [60: "Middle (1 min)"], [300: "Long (5 min)"], [1800: "Longer (30 min)"]], defaultValue: "10", required: true, multiple: false
+    
+	section([mobileOnly:true]) {
+    	label title: "Assign a name", required: false
+        mode title: "Set for specific mode(s)", required: false
 	}
 
-}
+}}
+
 
 def installed() {
 	log.debug("Installed")
@@ -104,7 +131,11 @@ def allLightsOff(){
 }
 
 def initialize() {
-
+    if (!((contactSensors || motionSensors) && (switches || switchLevels) && OwnershipSwitches))
+	{
+		log.error "install error - missing input"
+        assert false //How to throw an ArgumentException 
+    }
 	log.debug "Initialized with settings: ${settings}"
 	switches.each{s -> log.debug "Color lights added: ${s}, level: ${s.currentValue("level")}"; }
 	switchLevels.each{s -> log.debug "Level lights added: ${s}, level: ${s.currentValue("level")}"; }
@@ -201,7 +232,11 @@ def dayPeriod(){
     nightTime = new Date(nightTime.time - location.timeZone.getRawOffset())
 
 	def morningTime = new Date(); 
-	morningTime.set(hourOfDay: 06, minute: 00, second: 00);
+    
+	if (currentDayOfWeek == Calendar.SATURDAY || currentDayOfWeek == Calendar.SUNDAY)
+		morningTime.set(hourOfDay: 07, minute: 45, second: 00);
+    else
+		morningTime.set(hourOfDay: 06, minute: 00, second: 00);
     morningTime = new Date(morningTime.time - location.timeZone.getRawOffset())
 
 	if (timeOfDayIsBetween(sunInfo.sunset, nightTime, now, location.timeZone))
