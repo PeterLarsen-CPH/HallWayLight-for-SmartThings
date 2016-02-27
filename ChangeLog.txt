@@ -1,3 +1,6 @@
+2016-02-27
+  Added dynamic pages.
+  Changed the default time settings to extend the evening/morning in the weekend
 
 2016-02-25
   Getting weekday did not work - fixed by using a different method.
