@@ -23,6 +23,12 @@
       The way the app checks for ownership, is by checking whether the bulbs level has changed or not. 
       The reason for doing it that way and not by atomic-state, is that groovy on smartthings, doesn’t really
       support threading and therefore very often lead to race-conditions.
+      
+      The four periods of the day, have been hardcoded:
+       DAY => sunrise to sunset
+       EVENING => sunset to 23:00pm, friday and saturday to 23:59pm
+       MORNING => sunrise to 6:00am, saturday and sunday to 7:45am
+       NIGHT => the time betwwen EVENING and MORNING
 
  * Of other things planned…:
 
