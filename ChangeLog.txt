@@ -1,9 +1,13 @@
+next
+  Failing detecting when the NIGHT begins - fixed.
+  It is now possible to inactivate/activate the automation. 
+  
 2016-02-27
   Added dynamic pages.
   Changed the default time settings to extend the evening/morning in the weekend
 
 2016-02-25
-  Getting weekday did not work - fixed by using a different method.
+  Getting weekday doesn't work - fixed by using a different method.
   Color-temperature not used correctly - fixed.
   Added the possibility to choose which light bulbs that is used to control the ownership up against
   
