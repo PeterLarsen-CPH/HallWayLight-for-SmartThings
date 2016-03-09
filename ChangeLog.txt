@@ -1,4 +1,4 @@
-next
+2016-03-09 RELEASE
   Failing detecting when the NIGHT begins - fixed.
   It is now possible to inactivate/activate the automation. 
   
