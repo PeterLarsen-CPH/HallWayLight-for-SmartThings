@@ -27,6 +27,7 @@
  *		Definition of a ownership concept, where the app can detect if other apps is used to set the lights.
  *		Better control of levels of lights than just on/off.
  *		Adding more than one contact/motion sensors.
+ *		You can add a button controller to activate/deactivating the app, e.g. if you don't need the light for a period.
  *
  *	For limitations and missing things, please see the readme file at github:
  *		https://github.com/PeterLarsen-CPH/HallwayLight-for-SmartThings.git
@@ -72,6 +73,16 @@ def mainPage() {
         
         section("Select the bulbs used to state the ownership") {
             input "OwnershipSwitches", "capability.switchLevel", multiple: true, required: true
+        }
+        section("Select a contact to turn this schema on and off") {
+            input "onOffButton", "capability.button", multiple: false, required: false, submitOnChange: true
+        }
+        if (onOffButton)
+        {
+	        section("Choose the button") {
+    	        input "onOffbuttonNumber", "enum", title: "Button", options:
+        	        [[1: "Button 1"], [2: "Button 2"], [3: "Button 3"], [4: "Button 4"]], required: true, multiple: false
+            }
         }
         section("Set MIN and MAX levels for lights and different timings for the evening") {
             input "startLight", "number", title: "Minimum level before switching lights off (1-8)", defaultValue: "2", range: "1..8",
@@ -142,12 +153,14 @@ def initialize() {
 	OwnershipSwitches.each{s -> log.debug "Ownership lights added: ${s}, level: ${s.currentValue("level")}"; }
 	contactSensors.each({s -> log.debug "Contact sensors added: ${s} ${s.currentState("contact").value}" });
 	motionSensors.each({s -> log.debug "Motion sensors added: ${s} ${s.currentState("motion").value}" });    
-
+	onOffButton?.each({s -> log.debug "Contact button added ${s}"});    
 
 	state.levels = [00, 11, 22, 33, 44, 55, 66, 77, 88, 99]
     state.startLightUseThis = startLight
     state.maxLightUseThis = maxLight
     state.timeBeforeDecreasingUseThis = timeBeforeDecreasing
+    state.schemaOff = false;
+    state.schemaOffTime = new Date().time;
 
 	doWeOnwTheLights();	
 	dayPeriod()
@@ -162,10 +175,26 @@ def initialize() {
     	subscribe(motionSensors, "motion.active", sensorDetectedHandler)
        	subscribe(motionSensors, "motion.inactive", sensorStoppedHandler)
     }
+    if (onOffButton)
+    {
+		subscribe(onOffButton, "button.pushed", onOffbuttonEvent)
+	}
 }
 
 def sensorDetectedHandler(evt) {
     log.debug "sensorDetectedHandler called: $evt"
+    if (state.schemaOff){
+    	if (new Date().time > state.schemaOffTime)
+        {
+            log.debug "Schema inactivity is timed out"
+            state.schemaOff = false
+        }
+        else
+        {
+            log.debug "Schema is off"
+            return
+        }
+    }
     def period = dayPeriod();
     if (period == 'DAY')
     	return;
@@ -176,14 +205,62 @@ def sensorDetectedHandler(evt) {
 
 def sensorStoppedHandler(evt) {
     log.debug "sensorStoppedHandler called: $evt"
+    if (state.schemaOff){
+    	log.debug "Schema is off"
+        return
+    }
     dayPeriod()
 	runIn(state.timeBeforeDecreasingUseThis.toInteger(), decreaseLights, [overwrite: true]);
+}
+
+def onOffbuttonEvent(evt){
+    def buttonNumber = evt.data
+    def value = evt.value
+    log.debug "button: $buttonNumber, value: $value"
+
+    def button = -1;
+    switch(buttonNumber) {
+        case ~/.*1.*/:
+	        button = 1;
+        break
+        case ~/.*2.*/:
+    	    button = 2;
+        break
+        case ~/.*3.*/:
+        	button = 3;
+        break
+        case ~/.*4.*/:
+        	button = 4;
+        break
+    }
+    log.debug "Button number: $button"
+    if (button.toString() == onOffbuttonNumber)
+    {
+    	if (state.schemaOff) 
+        { //schema is currently off
+        	log.debug "Schema on"
+        	state.schemaOff = false;
+	    	switches?.setLevel(state.levels[state.startLightUseThis])
+            switchLevels?.setLevel(state.levels[state.startLightUseThis])
+			runIn(10, decreaseLights, [overwrite: true]);
+        }
+        else
+        { //schema is currently on
+        	log.debug "Schema off"
+        	state.schemaOff = true;
+        	state.schemaOffTime = new Date().time + 14400000; //four hours
+            allLightsOff();
+        }
+    }
 }
 
 def changeColorTemperatureIfChanged(){
 	if (switches == null)
     	return;
-	def colortemp = switches[0].currentValue("colorTemperature")
+	def colortemp = 0;
+    switches.each{s -> colortemp = s.currentValue("colorTemperature"); }
+    //switches[0].currentValue("colorTemperature")
+    
     if (colortemp != colorTemperature.toInteger())
     {
     	switches.setColorTemperature(colorTemperature)
@@ -199,7 +276,9 @@ def levelFromBulbLevel(){
     }
     else
     {
-		def level = OwnershipSwitches[0].currentValue("level")
+		def level = 0
+		OwnershipSwitches.each{s -> level = s.currentValue("level"); }
+		//OwnershipSwitches.each[0].currentValue("level")
 		level = (((level / 10) - (level / 10).toInteger()) * 10).toInteger();
         return level
     }
@@ -208,12 +287,15 @@ def levelFromBulbLevel(){
 def dayPeriod(){
 	def sunInfo = getSunriseAndSunset()
   	def now = new Date()
+   	//now.set(hourOfDay: 00, minute: 51, second: 00);
     state.startLightUseThis = startLight
     state.maxLightUseThis = maxLight
     state.timeBeforeDecreasingUseThis = timeBeforeDecreasing
     
 	//What if location is not set ?? (test that)
+    
     if (timeOfDayIsBetween(sunInfo.sunrise, sunInfo.sunset, now, location.timeZone))
+    //if (sunInfo.sunrise.compareTo(now) * now.compareTo(sunInfo.sunset) > 0)
     {
     	log.debug 'DAY time'
     	return 'DAY'
@@ -226,39 +308,51 @@ def dayPeriod(){
     int currentDayOfWeek = localCalendar.get(Calendar.DAY_OF_WEEK)
 
 	if (currentDayOfWeek == Calendar.FRIDAY || currentDayOfWeek == Calendar.SATURDAY)
-	   	nightTime.set(hourOfDay: 23, minute: 59, second: 00);
+	   	nightTime = timeToday("23:59:00", location.timeZone);
     else
-    	nightTime.set(hourOfDay: 23, minute: 00, second: 00);
-    nightTime = new Date(nightTime.time - location.timeZone.getRawOffset())
+    	nightTime = timeToday("23:00:00", location.timeZone);
+    //nightTime = new Date(nightTime.time - location.timeZone.getRawOffset())
 
 	def morningTime = new Date(); 
     
 	if (currentDayOfWeek == Calendar.SATURDAY || currentDayOfWeek == Calendar.SUNDAY)
-		morningTime.set(hourOfDay: 07, minute: 45, second: 00);
+		morningTime = timeToday("07:45:00", location.timeZone);
     else
-		morningTime.set(hourOfDay: 06, minute: 00, second: 00);
-    morningTime = new Date(morningTime.time - location.timeZone.getRawOffset())
+		morningTime = timeToday("06:00:00", location.timeZone); 
+    //morningTime = new Date(morningTime.time - location.timeZone.getRawOffset())
 
-	if (timeOfDayIsBetween(sunInfo.sunset, nightTime, now, location.timeZone))
+log.debug "night time: $nightTime"
+log.debug "morning time: $morningTime"
+log.debug "sunrise $sunInfo.sunrise"
+log.debug "sunset $sunInfo.sunset"
+log.debug "now $now"
+
+	//if (timeOfDayIsBetween(sunInfo.sunset, nightTime, now, location.timeZone))
+    if (sunInfo.sunset.compareTo(now) * now.compareTo(nightTime) > 0)
     {
     	log.debug 'EVENING time'
     	return 'EVENING'
 	}        
 
-	if (timeOfDayIsBetween(morningTime, sunInfo.sunrise, now, location.timeZone))
+	//if (timeOfDayIsBetween(morningTime, sunInfo.sunrise, now, location.timeZone))
+    if (morningTime.compareTo(now) * now.compareTo(sunInfo.sunrise) > 0)
     {
     	log.debug 'MORNING time'
     	return 'MORNING'
 	}        
     
-    if (timeOfDayIsBetween(nightTime, sunInfo.sunrise, now, location.timeZone))
-    {
-	    state.startLightUseThis = startLightNight
-    	state.maxLightUseThis = maxLightNight
-    	state.timeBeforeDecreasingUseThis = timeBeforeDecreasingNight
-    	log.debug "NIGHT time $Calendar.instance.DAY_OF_WEEK $Calendar.instance.SATURDAY"
+    //if (timeOfDayIsBetween(nightTime, sunInfo.sunrise, now, location.timeZone))
+    //if (nightTime.compareTo(now) * now.compareTo(sunInfo.sunrise) > 0)
+    //{ //if none of the others, then it is night
+    	if (lightsOnInNight)
+        {
+            state.startLightUseThis = startLightNight
+            state.maxLightUseThis = maxLightNight
+            state.timeBeforeDecreasingUseThis = timeBeforeDecreasingNight
+        }
+        log.debug "NIGHT"
     	return 'NIGHT'
-    }
+    //}
 }
 
 def doWeOnwTheLights() {
