@@ -1,5 +1,6 @@
  *	Description:
-             This app is called “Hallway Light” as it is meant for places where you often pass through and 
+ 
+            This app is called “Hallway Light” as it is meant for places where you often pass through and 
              therefore don’t need much light to find your way.  On the other hand, if you stay in the room a
              little bit longer, you would probably like to have more light.
              		
@@ -9,6 +10,7 @@
              over the lights and therefore should leave the lights as they are etc.
              
  *	Compared to Smart Light by SmartThings, this app solves the following problems:
+ 
              Color of LIFX bulbs is not handled very well (e.g. Warm White does not work at all).
              Start and end times does (or did?) not work in Smart Light.
              Destinctions between evening and night settings in one app.
