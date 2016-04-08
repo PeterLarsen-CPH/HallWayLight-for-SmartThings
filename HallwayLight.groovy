@@ -1,5 +1,5 @@
 /*
- *  Copyright 2015 SmartThings
+ *  Copyright 2015-2016 SmartThings
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -321,11 +321,11 @@ def dayPeriod(){
 		morningTime = timeToday("06:00:00", location.timeZone); 
     //morningTime = new Date(morningTime.time - location.timeZone.getRawOffset())
 
-log.debug "night time: $nightTime"
-log.debug "morning time: $morningTime"
-log.debug "sunrise $sunInfo.sunrise"
-log.debug "sunset $sunInfo.sunset"
-log.debug "now $now"
+//log.debug "night time: $nightTime"
+//log.debug "morning time: $morningTime"
+//log.debug "sunrise $sunInfo.sunrise"
+//log.debug "sunset $sunInfo.sunset"
+//log.debug "now $now"
 
 	//if (timeOfDayIsBetween(sunInfo.sunset, nightTime, now, location.timeZone))
     if (sunInfo.sunset.compareTo(now) * now.compareTo(nightTime) > 0)
@@ -390,7 +390,7 @@ def increaseLights(){
 
 		while(true){
 	        def roundtrip = now()
-			if (areAllSensorsOff())
+			if (areAllSensorsOff() || state.schemaOff)
 				return;
 
 			def level = levelFromBulbLevel() + turnOnSteps;
