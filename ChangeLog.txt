@@ -1,3 +1,9 @@
+2016-12-18
+  Changed the property to set how rapidly the light increase in level from 1-2 to 1-9. 
+    The higher number, the quicker the light will reach max.
+  Added option to set schema off, durring the night, when no motion have been detected for 30 minutes.
+  Updated logs in changeColorTemperatureIfChanged() - was showing wrong color-temperature.
+
 2016-04-08
   The method to increase the level of light failed to check whether automation is active or not - fixed. 
   
