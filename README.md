@@ -28,7 +28,7 @@
             The four periods of the day, have been hardcoded:
              DAY => sunrise to sunset
              EVENING => sunset to 23:00pm, friday and saturday to 23:59pm
-             MORNING => sunrise to 6:00am, saturday and sunday to 7:45am
+             MORNING => 6:00am to sunrise, saturday and sunday from 7:45am
              NIGHT => the time betwwen EVENING and MORNING
 
  * Of other things planned…:
