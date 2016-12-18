@@ -1,6 +1,4 @@
 /*
- *  Copyright 2015-2016 SmartThings
- *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
  *
@@ -87,9 +85,9 @@ def mainPage() {
         section("Set MIN and MAX levels for lights and different timings for the evening") {
             input "startLight", "number", title: "Minimum level before switching lights off (1-8)", defaultValue: "2", range: "1..8",
                 multiple: false, required: true
-            input "maxLight", "number", title: "Maximum level (2-9)", defaultValue: "9", range: "2..9",
+            input "maxLight", "number", title: "Maximum level (1-9)", defaultValue: "9", range: "1..9",
                 multiple: false, required: true
-            input "turnOnSteps", "number", title: "Set how quickly the lights turns on and increase in the level of light (1-2)", defaultValue: "1", range: "1..2",
+            input "turnOnSteps", "number", title: "Set how quickly the lights turns on and increase in the level of light (1-9)", defaultValue: "1", range: "1..9",
                 multiple: false, required: true
             input "timeBeforeDecreasing", "enum", title: "Specify how long the lights stays on before decreasing", options:
                 [[10: "Short (10 sec)"], [60: "Middle (1 min)"], [300: "Long (5 min)"], [1800: "Longer (30 min)"]], defaultValue: "300", required: true, multiple: false
@@ -105,10 +103,13 @@ def mainPage() {
             section("Set MIN and MAX levels for the night time (between 11pm and 6am (or sunrise)") {
                 input "startLightNight", "number", title: "Minimum level before switching lights off (1-8)", defaultValue: "1", range: "1..8",
                     multiple: false, required: true
-                input "maxLightNight", "number", title: "Maximum level (2-9)", defaultValue: "2", range: "2..9",
+                input "maxLightNight", "number", title: "Maximum level (1-9)", defaultValue: "2", range: "1..9",
                     multiple: false, required: true
                 input "timeBeforeDecreasingNight", "enum", title: "Specify how long the lights stays on before decreasing", options:
                     [[10: "Short (10 sec)"], [60: "Middle (1 min)"], [300: "Long (5 min)"], [1800: "Longer (30 min)"]], defaultValue: "10", required: true, multiple: false
+            	input "turnOffNightIfInactive", "bool", title: "Disable schema at night if no motion for 30 mins", defaultValue: false,
+                	multiple: false, required: true, submitOnChange: true
+                    
             }
         }
         
@@ -145,7 +146,7 @@ def initialize() {
     if (!((contactSensors || motionSensors) && (switches || switchLevels) && OwnershipSwitches))
 	{
 		log.error "install error - missing input"
-        assert false //How to throw an ArgumentException 
+        assert false //How to throw an ArgumentException ??
     }
 	log.debug "Initialized with settings: ${settings}"
 	switches.each{s -> log.debug "Color lights added: ${s}, level: ${s.currentValue("level")}"; }
@@ -209,8 +210,19 @@ def sensorStoppedHandler(evt) {
     	log.debug "Schema is off"
         return
     }
-    dayPeriod()
+    def period = dayPeriod();
 	runIn(state.timeBeforeDecreasingUseThis.toInteger(), decreaseLights, [overwrite: true]);
+    
+    if (period == 'NIGHT' && lightsOnInNight && turnOffNightIfInactive)
+		runIn(30 * 60, nightSchemaOff, [overwrite: true]); //schedule schema off in 30 mins
+}
+
+def nightSchemaOff(){
+    if (dayPeriod() == 'NIGHT' && doWeOnwTheLights() && areAllSensorsOff())
+    {
+    	log.debug "Schema is automatically deactivated due to inactivity"
+        setSchemaOff()
+    }
 }
 
 def onOffbuttonEvent(evt){
@@ -246,20 +258,26 @@ def onOffbuttonEvent(evt){
         }
         else
         { //schema is currently on
-        	log.debug "Schema off"
-        	state.schemaOff = true;
-        	state.schemaOffTime = new Date().time + 14400000; //four hours
-            allLightsOff();
+			setSchemaOff()
         }
     }
+}
+
+def setSchemaOff(){
+	log.debug "Schema off"
+    state.schemaOff = true;
+    state.schemaOffTime = new Date().time + 14400000; //four hours
+    allLightsOff();
 }
 
 def changeColorTemperatureIfChanged(){
 	if (switches == null)
     	return;
+    log.debug "requested temp: $colorTemperature"
 	def colortemp = 0;
     switches.each{s -> colortemp = s.currentValue("colorTemperature"); }
     //switches[0].currentValue("colorTemperature")
+    log.debug "Found temp: $colortemp"
     
     if (colortemp != colorTemperature.toInteger())
     {
@@ -383,7 +401,7 @@ def increaseLights(){
 	def minRoundtrip = 1500; //1.5 seconds
     def maxStayingInMethod = 15000; //15 seconds
 
-	if (doWeOnwTheLights())
+	if (doWeOnwTheLights() && !state.schemaOff)
    	{
         def enter = now()
     	changeColorTemperatureIfChanged()
