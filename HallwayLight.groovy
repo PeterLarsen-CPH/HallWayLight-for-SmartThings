@@ -68,9 +68,13 @@ def mainPage() {
 		section("-or these level controllable lights") {
             input "switchLevels", "capability.switchLevel", multiple: true, required: false
         }
+		
+        section("-or these outlet switches") {
+            input "outletSwitches", "capability.switch", multiple: true, required: false
+        }
         
         section("Select the bulbs used to state the ownership") {
-            input "OwnershipSwitches", "capability.switchLevel", multiple: true, required: true
+            input "OwnershipSwitches", "capability.switchLevel", multiple: true, required: false
         }
         section("Select a contact to turn this schema on and off") {
             input "onOffButton", "capability.button", multiple: false, required: false, submitOnChange: true
@@ -140,10 +144,11 @@ def allLightsOff(){
 	log.debug "All lights off"
     switches?.off()
     switchLevels?.off()
+    outletSwitches?.off()
 }
 
 def initialize() {
-    if (!((contactSensors || motionSensors) && (switches || switchLevels) && OwnershipSwitches))
+    if (!((contactSensors || motionSensors) && (switches || switchLevels || outletSwitches)))
 	{
 		log.error "install error - missing input"
         assert false //How to throw an ArgumentException ??
@@ -152,7 +157,9 @@ def initialize() {
 	switches.each{s -> log.debug "Color lights added: ${s}, level: ${s.currentValue("level")}"; }
 	switchLevels.each{s -> log.debug "Level lights added: ${s}, level: ${s.currentValue("level")}"; }
 	OwnershipSwitches.each{s -> log.debug "Ownership lights added: ${s}, level: ${s.currentValue("level")}"; }
-	contactSensors.each({s -> log.debug "Contact sensors added: ${s} ${s.currentState("contact").value}" });
+    outletSwitches.each{s -> log.debug "Outlet switches added: ${s}, switch: ${s.currentValue("switch")}"; }
+	
+    contactSensors.each({s -> log.debug "Contact sensors added: ${s} ${s.currentState("contact").value}" });
 	motionSensors.each({s -> log.debug "Motion sensors added: ${s} ${s.currentState("motion").value}" });    
 	onOffButton?.each({s -> log.debug "Contact button added ${s}"});    
 
@@ -287,7 +294,15 @@ def changeColorTemperatureIfChanged(){
 }
 
 def levelFromBulbLevel(){
-	def allOff = !OwnershipSwitches.any({s -> s.currentSwitch == "on"});
+	def levelBulbs = OwnershipSwitches;
+	if (!levelBulbs)
+    	levelBulbs = switchLevels;
+	if (!levelBulbs)
+    	levelBulbs = switches;
+	if (!levelBulbs)
+    	return state.maxLightUseThis; //if not possible to state the level, then just return max-level
+
+	def allOff = !levelBulbs.any({s -> s.currentSwitch == "on"});
     if (allOff)
     {
     	return state.startLightUseThis
@@ -295,8 +310,8 @@ def levelFromBulbLevel(){
     else
     {
 		def level = 0
-		OwnershipSwitches.each{s -> level = s.currentValue("level"); }
-		//OwnershipSwitches.each[0].currentValue("level")
+		levelBulbs.each{s -> level = s.currentValue("level"); }
+		//levelBulbs.each[0].currentValue("level")
 		level = (((level / 10) - (level / 10).toInteger()) * 10).toInteger();
         return level
     }
@@ -374,6 +389,9 @@ def dayPeriod(){
 }
 
 def doWeOnwTheLights() {
+	if (!OwnershipSwitches)
+    	return true; //if Ownership switches is not set, then just say we own the lights
+        
     def allOff = !OwnershipSwitches.any({s -> s.currentSwitch == "on"});
     def allOn = !OwnershipSwitches.any({s -> s.currentSwitch == "off"});
 
@@ -418,7 +436,10 @@ def increaseLights(){
             switchLevels?.setLevel(state.levels[level])
 		    log.trace "Setting bulbs to: ${state.levels[level]}%";    
 		    if (level >= state.maxLightUseThis)
+            {
+            	outletSwitches?.on();
             	return;
+            }
             
             if ((now() - roundtrip) < minRoundtrip )
             {
@@ -428,7 +449,7 @@ def increaseLights(){
             }
 
             if (now() - enter > maxStayingInMethod)
-            {
+            {	 //for the projection - otherwise we get an ugly exception
             	log.error "timed out"
             	return;
             }
@@ -447,6 +468,7 @@ def decreaseLights(){
 			level = state.startLightUseThis;
 	    	switches?.setLevel(state.levels[level])
             switchLevels?.setLevel(state.levels[level])
+           	outletSwitches?.off();
     		log.trace "Decreasing bulbs to: ${state.levels[level]}%";    
     		runIn(timeBeforeLightOff.toInteger() * 60, decreaseLights, [overwrite: true]);
 		}
