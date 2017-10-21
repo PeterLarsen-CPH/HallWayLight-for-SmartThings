@@ -34,6 +34,5 @@
  * Of other things planned…:
 
             *Support of setting colors.
-            *Support of controlling outlet switches, e.g. when the level reaches maximum.
             *Option to leave light as it is if already on or if the level of light is already higher than it otherwise would be set to. 
             This is useful if you have more than one sensor to control a light bulb and you want different levels of light depending on which sensor activating the light.
