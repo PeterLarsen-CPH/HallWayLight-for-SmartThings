@@ -1,3 +1,9 @@
+2017-10-21
+  Introduced outlet switches.
+  "Select the bulbs used to state the ownership" is no longer mandatory. If ownership is not set, 
+    then the app will just think it always owns the lightbulbs.
+	  Also if ownership is not set, the app will try to find current level from other devices added.
+  
 2016-12-18
   Changed the property to set how rapidly the light increase in level from 1-2 to 1-9. 
     The higher number, the quicker the light will reach max.
