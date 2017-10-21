@@ -9,7 +9,7 @@
              depending on evening/morning and night settings, and detecting if other apps have taken control
              over the lights and therefore should leave the lights as they are etc.
              
-           You should only associate a given lightbulb to one instance of a smartApp, and then add as many sensors as you
+            You should only associate a given lightbulb to one instance of a smartApp, and then add as many sensors as you
              want to that instance of the smartApp.
              If there are more than one smartApp to control a lightbulb, the result could be that one instance want to turn
              off the light while another instance want to turn it on.
@@ -40,4 +40,4 @@
 
             *Support of setting colors.
             *Option to leave light as it is if already on or if the level of light is already higher than it otherwise would be set to. 
-            This is useful if you have more than one smartapp to control a light bulb and you want different levels of light depending on which smartapp activating the light.
+             This is useful if you have more than one smartapp to control a light bulb and you want different levels of light depending on which smartapp activating the light.
