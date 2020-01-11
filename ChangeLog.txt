@@ -1,3 +1,14 @@
+2020-01-11
+When going from MORNING to DAY, the lights-off commands never gets fired if the sensor is getting 
+  activated more often than the lights off-time. This problem has been temporary fixed by
+  setting timeBeforeDecreasing to 300 seconds (5 minutes) when the day-periode is DAY - meaning,
+  that the light is forced off after five minutes.
+When changing away from NIGHT mode, state.schemaOff is then set to off regardless of the value
+  in state.schemaOffTime. This fix the issue where the schema doesn't go live when changing
+  to MORNING mode.
+state.schemaOffTime, used to re-activate light during NIGHT mode, have been changed to 8 hours - which is equal
+  to never reactivate until the mode is changed.
+
 2017-10-21
   Introduced outlet switches.
   "Select the bulbs used to state the ownership" is no longer mandatory. If ownership is not set, 
