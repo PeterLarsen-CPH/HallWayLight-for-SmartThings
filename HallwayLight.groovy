@@ -191,10 +191,13 @@ def initialize() {
 
 def sensorDetectedHandler(evt) {
     log.debug "sensorDetectedHandler called: $evt"
+    
+    def period = dayPeriod();
+    
     if (state.schemaOff){
-    	if (new Date().time > state.schemaOffTime)
+    	if (period != 'NIGHT' || new Date().time > state.schemaOffTime)
         {
-            log.debug "Schema inactivity is timed out"
+            log.debug "Schema inactivity is timed out or the day mode changed from NIGHT"
             state.schemaOff = false
         }
         else
@@ -203,7 +206,7 @@ def sensorDetectedHandler(evt) {
             return
         }
     }
-    def period = dayPeriod();
+
     if (period == 'DAY')
     	return;
     if (period == 'NIGHT' && !lightsOnInNight)
@@ -273,7 +276,7 @@ def onOffbuttonEvent(evt){
 def setSchemaOff(){
 	log.debug "Schema off"
     state.schemaOff = true;
-    state.schemaOffTime = new Date().time + 14400000; //four hours
+    state.schemaOffTime = new Date().time + 28800 * 000; //8 hours - same as never go off by itself
     allLightsOff();
 }
 
@@ -331,6 +334,7 @@ def dayPeriod(){
     //if (sunInfo.sunrise.compareTo(now) * now.compareTo(sunInfo.sunset) > 0)
     {
     	log.debug 'DAY time'
+        state.timeBeforeDecreasingUseThis = 5 * 60 //Lights off in 5 minutes regardless of current settings
     	return 'DAY'
 	}
 
