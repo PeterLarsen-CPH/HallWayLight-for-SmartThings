@@ -1,3 +1,9 @@
+2020-01-12
+Invalid implementation, of setting state.schemaOffTime, in method setSchemaOff. 
+  state.schemaOffTime should have been set in miliseconds, but was multiplied 
+  with 000 instead of 1000 by mistake.
+  This implementation have exists for one day only.
+
 2020-01-11
 When going from MORNING to DAY, the lights-off commands never gets fired if the sensor is getting 
   activated more often than the lights off-time. This problem has been temporary fixed by
