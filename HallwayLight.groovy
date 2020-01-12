@@ -276,7 +276,7 @@ def onOffbuttonEvent(evt){
 def setSchemaOff(){
 	log.debug "Schema off"
     state.schemaOff = true;
-    state.schemaOffTime = new Date().time + 28800 * 000; //8 hours - same as never go off by itself
+    state.schemaOffTime = new Date().time + 28800 * 1000; //8 hours (in miliseconds) - same as never go off by itself
     allLightsOff();
 }
 
